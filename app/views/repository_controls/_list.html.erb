@@ -1,0 +1,53 @@
+<% role_controls = RepositoryControl.find(:all, :conditions => ['role_id IS NOT NULL AND project_id = ?', @project.id]) %> 
+<div class="box">
+    <h3> Repository Controls </h3>
+
+    <table class="list">
+        <thead><tr>
+            <th align="left">Role</th>
+            <th align="left">Path</th>
+            <th align="right">Permissions</th>
+            <th></th></tr>
+        </thead>
+        <tbody>
+        <% if role_controls.any? %>
+            <% role_controls.each do |control| %>
+                <tr class="control <%= cycle 'odd', 'even' %>">
+                    <td align="left" width="25%" class="role"><%= Role.find(control.role_id).name %></td>
+                    <td align="left"><%= control.path %></td>
+                    <% if control.permissions %>
+                        <td align="right">
+                            <% if control.permissions.include? :browse_repository %>
+                                <%= l_or_humanize("read", :prefix => 'repository_control_') %>
+                                <% if control.permissions.include? :commit_access %>
+                                / <%= l_or_humanize("write", :prefix => 'repository_control_') %>
+                                <% end%>
+                            <% elsif control.permissions.include? :commit_access %>
+                                <%= l_or_humanize("write", :prefix => 'repository_control_') %>
+                            <% else %>
+                                <%= l_or_humanize("none", :prefix => 'repository_control_') %>
+                            <% end %>
+                        </td>
+
+                    <% else %>
+                        <td align="right">none</td>
+                    <% end %>
+                    <td align="center" width="120px">
+                        <%= link_to_if_authorized l(:button_edit), { :controller => 'repository_controls', :action => 'edit', :id => control }, :class => 'icon icon-edit' %> 
+                        <%= link_to_if_authorized l(:button_delete), {:controller => 'repository_controls', :action => 'destroy', :id => control }, :method => :post, :class => 'icon icon-del' %>
+                    </td>
+                </tr>
+            <% end %>
+        <% else %>
+            <tr><td colspan="3" align="center">None</td></tr>
+        <% end %>
+        <% reset_cycle %>
+        </tbody>
+    </table>
+    <p><%= link_to_if_authorized l(:repository_controls_new), :controller => 'repository_controls', :action => 'new', :id => @project, :type => "role" %></p>
+
+    <br/>
+    <br/>
+</div>
+
+

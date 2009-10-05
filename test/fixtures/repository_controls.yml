@@ -1,0 +1,13 @@
+# Read about fixtures at http://ar.rubyonrails.org/classes/Fixtures.html
+one:
+  id: 1
+  project_id: 1
+  role_id: 1
+  path: MyString
+  permissions: MyText
+two:
+  id: 2
+  project_id: 1
+  role_id: 1
+  path: MyString
+  permissions: MyText

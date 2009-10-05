@@ -1,0 +1,3 @@
+= Redmine Repository Controls
+
+Adds fine grained permissions to repositories through redmine and apache

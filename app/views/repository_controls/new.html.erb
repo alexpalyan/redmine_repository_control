@@ -1,0 +1,9 @@
+<h2>New Control</h2>
+<div id="add-control" style="">
+    <h3><%= l(:repository_controls_new) %></h3>
+    <% labelled_tabular_form_for :repository_control, @control, :url => { :controller => 'repository_controls', :action => 'new', :id => @project} do |f| %>
+    <%= render :partial => 'repository_controls/form', :locals => { :f => f} %>
+    <%= submit_tag l(:button_add) %> 
+    <% end %>
+</div>
+
