@@ -126,8 +126,11 @@ sub access_handler {
         my $project_id = get_project_identifier($r);
         my $project_pub = is_public_project( $project_id, $r );
         if ( $project_pub > 0 ) {
-            # public project, so we check anonymous permissions
+            #public project, so we check anonymous permissions
+            #        my $perm = get_anonymous_permissions($r);
             # skip authen handler if anonymous is allowed
+            #$r->set_handlers( PerlAuthenHandler => [ \&OK ] ) if check_permission( $perm, $r ) == OK;   
+            #$r->log_error("Checking anon perms");
             if ( check_role_permissions('2', $r) == OK ) {
                 #anonymous is allowed access
                 $r->set_handlers( PerlAuthenHandler => [ \&OK ] );
@@ -248,7 +251,9 @@ sub authen_handler {
 #
 sub authz_handler {
     my $r = shift;
-    my $ret = FORBIDDEN; # The default is to deny access
+    my $ret = FORBIDDEN;
+
+    ##$r->log_error("Checking authorization");
 
     my $redmine_user = $r->user;
     my $uri          = $r->uri;
@@ -256,11 +261,14 @@ sub authz_handler {
     my $req_path     = get_requested_path($r);
     my $dbh          = connect_database($r);
 
+    #$r->log_error("Checking for path: $req_path");
+
     ######################################################################
     #
     # 1. Check generic permissions for access
     #
     if ( check_role_permissions( '1', $r ) == OK ) {
+        #$r->log_error("generic permissions allows access");
         $ret = OK;
     }
 
@@ -273,6 +281,7 @@ sub authz_handler {
                     AND roles.id=members.role_id AND users.status=1 AND login=? AND identifier=?");
     $sth->execute($redmine_user, $project_id);
     while ( my($role_id) = $sth->fetchrow_array ) {
+        #$r->log_error("$redmine_user was found to be in role $role_id for project $project_id");
         $ret = check_role_permissions($role_id, $r);
     }
 
@@ -300,6 +309,7 @@ sub check_role_permissions {
     my $sth = $dbh->prepare("SELECT position, permissions FROM roles WHERE roles.id=?");
 
     $sth->execute($role_id);
+    #$r->log_error("Checking permissions for role $role_id");
     while ( my($position, $permissions) = $sth->fetchrow_array ) {
         # check default permissions then explicit permissions which 
         # will overwrite the default permissions
@@ -309,9 +319,11 @@ sub check_role_permissions {
         if ( check_permission($permissions, $r) == OK ) {
             # the role has access to perform the requested operation
             $ret = OK;
+            #$r->log_error("Users role has default access");
         }
     }
 
+    #$r->log_error("User's role's position is $role_position");
 
     # now check if there is an explicit role definition 
     $sth = $dbh->prepare("SELECT roles.position, repository_controls.role_id, repository_controls.permissions, 
@@ -322,17 +334,33 @@ sub check_role_permissions {
     $sth->execute($project_id);
 
     # check the result from the DB query to try and authenticate the user
+    my ($blocked_path); # used for when higher permissions block access
+    #$r->log_error("Checking explicit permissions for role and path");
     while ( my($position, $id, $permission, $path) = $sth->fetchrow_array ) {
-        if ( $req_path =~ m{$path} ) {
-            if ( $position < $role_position ) {
+        if ( $req_path =~ m{$path[/]?} ) {
+            #$r->log_error("found permissions for $id - $position, $permission, $path");
+
+            if ( $position < $role_position or $role_id <= 2) {
                 # There is a specific permission defined for a higher level role, deny this role
                 $ret = FORBIDDEN;
-           } elsif ( !defined($ret) or $ret != FORBIDDEN ) {
+                $blocked_path = $path;
+                #$r->log_error("higher permission found, denying access, blocked path = $blocked_path");
+           } elsif (!defined($ret) or $ret != FORBIDDEN) {
+               #$r->log_error("Found permissions for the requested: $path");
                 if ( check_permission($permission, $r) == OK ) {
+                    #$r->log_error("User role is explicity allowed access");
                     # user has explicit permission to perform the action requested
                     $ret = OK;
                 } else {
                     # otherwise it has been explicity denied
+                    #$r->log_error("User role is explicity denied access");
+                    $ret = FORBIDDEN;
+                }
+            } elsif (defined($blocked_path) and $blocked_path =~ m{$path} and $role_id == $id) {
+                #$r->log_error("Found a explicit permission overriding higher role");
+                if ( check_permission($permission, $r) == OK ) {
+                    $ret = OK;
+                } else {
                     $ret = FORBIDDEN;
                 }
             }

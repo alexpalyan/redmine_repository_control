@@ -1,9 +1,10 @@
 <% roles = Role.find_all_givable %>
+
+<%= render :partial => 'dir_list' %>
+<br />
 <div class="box tabular">
     <p><label for="role_id"><%= l(:label_role) %></label>
         <%= f.select :role_id, roles.collect{|role| [role.name, role.id]} %></p>
-    
-    <p><%=f.text_field :path, :label => "Path", :size => 60, :required => true %></p>
     <p><label for="repository_control[permissions][]">
         <%= l_or_humanize("browse_repository", :prefix => 'permission_') %></label>
     <%= check_box_tag 'repository_control[permissions][]', "browse_repository", (@control.permissions.include? :browse_repository)%>
