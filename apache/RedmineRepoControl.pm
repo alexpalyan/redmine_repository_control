@@ -226,7 +226,7 @@ sub authen_handler {
     #
     # If the login was successful, add it to the cache
     #
-    if ($cfg->{RedmineCacheCredsMax} and $ret) {
+    if ($cfg->{RedmineCacheCredsMax} and $ret == OK) {
         if (defined $usrprojpass) {
             $cfg->{RedmineCacheCreds}->set($redmine_user.":".$project_id, $pass_digest);
         } else {
@@ -238,6 +238,10 @@ sub authen_handler {
                 $cfg->{RedmineCacheCredsCount} = 0;
             }
         }
+    }
+
+    if ($ret == AUTH_REQUIRED) {
+        $r->note_basic_auth_failure;
     }
 
     $ret;
@@ -276,13 +280,16 @@ sub authz_handler {
     #
     # 2. Check the role the user belongs to in the project for permissions
     #
-    my $sth = $dbh->prepare("SELECT roles.id FROM members, projects, users, roles
+    my $sth = $dbh->prepare("SELECT roles.id FROM members, projects, users, roles, member_roles
                     WHERE projects.id=members.project_id AND users.id=members.user_id
-                    AND roles.id=members.role_id AND users.status=1 AND login=? AND identifier=?");
+                    AND member_roles.member_id=members.id
+                    AND roles.id=member_roles.role_id AND users.status=1 AND login=? AND identifier=?");
     $sth->execute($redmine_user, $project_id);
     while ( my($role_id) = $sth->fetchrow_array ) {
         #$r->log_error("$redmine_user was found to be in role $role_id for project $project_id");
-        $ret = check_role_permissions($role_id, $r);
+        if ($ret == FORBIDDEN) {
+            $ret = check_role_permissions($role_id, $r);
+        }
     }
 
     $sth->finish();
@@ -384,7 +391,13 @@ sub get_requested_path {
     my $r = shift;
 
     my $location = $r->location;
-    my ($path) = $r->uri =~ m{$location/*[^/]+(/.*)};
+    my $path;
+
+    if ($r->uri =~ m{$location/*[^/]+(/.*)}) {
+        ($path) = $r->uri =~ m{$location/*[^/]+(/.*)};
+    } elsif ($r->uri =~ m{$location/*[^/]}) {
+        $path = "/";
+    }
 
     $path
 }
@@ -418,13 +431,14 @@ sub check_permission() {
     my $perm = shift;
     my $r    = shift;
 
-
-    if ( defined $read_only_methods{ $r->method } ) {
-        #$r->log_error("Checking permission '$perm' for read access");
-        return OK if ( $perm =~ /:browse_repository/ );
-    } else {
-        #$r->log_error("Checking permission '$perm' for write access");
-        return OK if ( $perm =~ /:commit_access/ );
+    if (defined $perm) {
+        if ( defined $read_only_methods{ $r->method } ) {
+            #$r->log_error("Checking permission '$perm' for read access");
+            return OK if ( $perm =~ /:browse_repository/ );
+        } else {
+            #$r->log_error("Checking permission '$perm' for write access");
+            return OK if ( $perm =~ /:commit_access/ );
+        }
     }
 
     return FORBIDDEN;
