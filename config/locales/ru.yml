@@ -1,5 +1,5 @@
 # Russian strings go here for Rails i18n
-en:
+ru:
   repository_controls: "Доступ в хранилище"
   repository_controls_roles: "Доступ для роли"
   repository_controls_new: "Новый доступ"
