@@ -1,0 +1,5 @@
+# English strings go here for Rails i18n
+en:
+  repository_controls: "Repository Controls"
+  repository_controls_roles: "Role Controls"
+  repository_controls_new: "New Control"
