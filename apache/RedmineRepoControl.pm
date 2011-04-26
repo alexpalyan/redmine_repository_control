@@ -344,7 +344,7 @@ sub check_role_permissions {
     my ($blocked_path); # used for when higher permissions block access
     #$r->log_error("Checking explicit permissions for role and path");
     while ( $ret == FORBIDDEN and my($position, $id, $permission, $path) = $sth->fetchrow_array ) {
-        if ( $ret == FORBIDDEN and $req_path =~ m{$path[/]?} ) {
+        if ( $ret == FORBIDDEN and $role_id == $id and $req_path =~ m{$path[/]?} ) {
             #$r->log_error("found permissions for $id - $position, $permission, $path");
             $ret = check_permission($permission, $r);
         }
