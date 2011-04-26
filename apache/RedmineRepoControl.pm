@@ -304,7 +304,7 @@ sub check_role_permissions {
     my $role_id = shift;
     my $r = shift;
 
-    my ($ret);
+    my $ret = FORBIDDEN;
 
     my $redmine_user = $r->user;
     my $uri          = $r->uri;
@@ -313,7 +313,7 @@ sub check_role_permissions {
     my ($role_position);
 
     my $dbh          = connect_database($r);
-    my $sth = $dbh->prepare("SELECT position, permissions FROM roles WHERE roles.id=?");
+    my $sth = $dbh->prepare("SELECT position, permissions FROM roles WHERE roles.id=? ORDER BY position DESC");
 
     $sth->execute($role_id);
     #$r->log_error("Checking permissions for role $role_id");
@@ -343,34 +343,10 @@ sub check_role_permissions {
     # check the result from the DB query to try and authenticate the user
     my ($blocked_path); # used for when higher permissions block access
     #$r->log_error("Checking explicit permissions for role and path");
-    while ( my($position, $id, $permission, $path) = $sth->fetchrow_array ) {
-        if ( $req_path =~ m{$path[/]?} ) {
+    while ( $ret == FORBIDDEN and my($position, $id, $permission, $path) = $sth->fetchrow_array ) {
+        if ( $ret == FORBIDDEN and $req_path =~ m{$path[/]?} ) {
             #$r->log_error("found permissions for $id - $position, $permission, $path");
-
-            if ( $position < $role_position or $role_id <= 2) {
-                # There is a specific permission defined for a higher level role, deny this role
-                $ret = FORBIDDEN;
-                $blocked_path = $path;
-                #$r->log_error("higher permission found, denying access, blocked path = $blocked_path");
-           } elsif (!defined($ret) or $ret != FORBIDDEN) {
-               #$r->log_error("Found permissions for the requested: $path");
-                if ( check_permission($permission, $r) == OK ) {
-                    #$r->log_error("User role is explicity allowed access");
-                    # user has explicit permission to perform the action requested
-                    $ret = OK;
-                } else {
-                    # otherwise it has been explicity denied
-                    #$r->log_error("User role is explicity denied access");
-                    $ret = FORBIDDEN;
-                }
-            } elsif (defined($blocked_path) and $blocked_path =~ m{$path} and $role_id == $id) {
-                #$r->log_error("Found a explicit permission overriding higher role");
-                if ( check_permission($permission, $r) == OK ) {
-                    $ret = OK;
-                } else {
-                    $ret = FORBIDDEN;
-                }
-            }
+            $ret = check_permission($permission, $r);
         }
     } 
 
