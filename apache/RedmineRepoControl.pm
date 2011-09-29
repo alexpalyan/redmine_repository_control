@@ -53,6 +53,18 @@ my @directives = (
         args_how     => TAKE1,
         errmsg => 'RedmineCacheCredsMax must be a decimal number',
     },
+    {
+        name         => 'RedmineSelfLogin',
+        req_override => OR_AUTHCFG,
+        args_how     => TAKE1,
+        errmsg => 'RedmineCacheCredsMax must be a decimal number',
+    },
+    {
+        name         => 'RedmineSelfPassword',
+        req_override => OR_AUTHCFG,
+        args_how     => TAKE1,
+        errmsg => 'RedmineCacheCredsMax must be a decimal number',
+    },
 );
 
 sub RedmineDSN {
@@ -87,6 +99,9 @@ sub RedmineCacheCredsMax {
         $self->{RedmineCacheCredsMax} = $arg;
     }
 }
+
+sub RedmineSelfLogin { set_val('RedmineSelfLogin', @_); }
+sub RedmineSelfPassword { set_val('RedmineSelfPassword', @_); }
 
 sub trim {
     my $string = shift;
@@ -162,6 +177,9 @@ sub authen_handler {
     #1. Check the chache for the user's credentials
     my $usrprojpass;
     my $pass_digest = Digest::SHA1::sha1_hex($redmine_pass);
+
+    return OK if ( $redmine_user eq $cfg->{RedmineSelfLogin} and $redmine_pass eq $cfg->{RedmineSelfPassword});
+
     if ($cfg->{RedmineCacheCredsMax}) {
         $usrprojpass = $cfg->{RedmineCacheCreds}->get($redmine_user.":".$project_id);
         return OK if ( defined $usrprojpass and ( $usrprojpass eq $pass_digest ));
@@ -264,6 +282,7 @@ sub authz_handler {
     my $project_id   = get_project_identifier($r);
     my $req_path     = get_requested_path($r);
     my $dbh          = connect_database($r);
+    my $cfg = Apache2::Module::get_config(__PACKAGE__, $r->server, $r->per_dir_config);
 
     #$r->log_error("Checking for path: $req_path");
 
@@ -271,7 +290,7 @@ sub authz_handler {
     #
     # 1. Check generic permissions for access
     #
-    if ( check_role_permissions( '1', $r ) == OK ) {
+    if ( check_role_permissions( '1', $r ) == OK or ( $redmine_user eq $cfg->{RedmineSelfLogin} and check_permission(":browse_repository", $r) == OK ) ) {
         #$r->log_error("generic permissions allows access");
         $ret = OK;
     }
@@ -333,19 +352,18 @@ sub check_role_permissions {
     #$r->log_error("User's role's position is $role_position");
 
     # now check if there is an explicit role definition 
-    $sth = $dbh->prepare("SELECT roles.position, repository_controls.role_id, repository_controls.permissions, 
-        repository_controls.path FROM repository_controls, projects, roles
+    $sth = $dbh->prepare("SELECT repository_controls.role_id, repository_controls.permissions, 
+        repository_controls.path FROM repository_controls, projects
         WHERE projects.id=repository_controls.project_id 
-        AND roles.id=repository_controls.role_id 
+        AND repository_controls.role_id=?
         AND identifier=?");
-    $sth->execute($project_id);
+    $sth->execute($role_id, $project_id);
 
     # check the result from the DB query to try and authenticate the user
-    my ($blocked_path); # used for when higher permissions block access
     #$r->log_error("Checking explicit permissions for role and path");
-    while ( $ret == FORBIDDEN and my($position, $id, $permission, $path) = $sth->fetchrow_array ) {
-        if ( $ret == FORBIDDEN and $role_id == $id and ($req_path =~ m{$path[/]?} or $req_path =~ m/!svn/) ) {
-            #$r->log_error("found permissions for $id - $position, $permission, $path");
+    while ( $ret == FORBIDDEN and my($id, $permission, $path) = $sth->fetchrow_array ) {
+        if ( $role_id == $id and ($req_path =~ m{$path[/]?} or $req_path =~ m/!svn/) ) {
+            #$r->log_error("found permissions for $id - $permission, $path");
             $ret = check_permission($permission, $r);
         }
     } 
