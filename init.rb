@@ -1,5 +1,8 @@
 require 'redmine'
-require 'repository_controls_projects_helper_patch'
+
+Dispatcher.to_prepare :redmine_repository_controls do
+  ProjectsHelper.send(:include, RepositoryControls::ProjectsHelperPatch) unless ProjectsHelper.included_modules.include?(RepositoryControls::ProjectsHelperPatch)
+end
 
 Redmine::Plugin.register :redmine_repository_controls do
   name 'Redmine Repository Controls plugin'

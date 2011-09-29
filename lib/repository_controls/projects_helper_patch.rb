@@ -17,28 +17,30 @@
 
 require_dependency 'projects_helper'
 
-module RepositoryControlsProjectsHelperPatch
-  def self.included(base) # :nodoc:
-    base.send(:include, ProjectsHelperMethodsRepositoryControls)
+module RepositoryControls
+  # Patches Redmine's ProjectsHelper dynamically.
+  module ProjectsHelperPatch
+    def self.included(base) # :nodoc:
+      base.send(:include, InstanceMethods)
 
-    base.class_eval do
-      unloadable # Send unloadable so it will not be unloaded in development
+      base.class_eval do
+        unloadable # Send unloadable so it will not be unloaded in development
 
-      alias_method_chain :project_settings_tabs, :repository_controls
+        alias_method_chain :project_settings_tabs, :repository_controls
+      end
+
     end
 
+    module InstanceMethods
+      def project_settings_tabs_with_repository_controls
+        tabs = project_settings_tabs_without_repository_controls
+        action = {:name => 'repository_controls', :controller => 'repository_controls', :action => :list, :partial => 'repository_controls/list', :label => :repository_controls}
+
+        tabs << action if User.current.allowed_to?(action, @project)
+
+        tabs
+      end
+    end
   end
 end
 
-module ProjectsHelperMethodsRepositoryControls
-  def project_settings_tabs_with_repository_controls
-    tabs = project_settings_tabs_without_repository_controls
-    action = {:name => 'repository_controls', :controller => 'repository_controls', :action => :list, :partial => 'repository_controls/list', :label => :repository_controls}
-
-    tabs << action if User.current.allowed_to?(action, @project)
-
-    tabs
-  end
-end
-
-ProjectsHelper.send(:include, RepositoryControlsProjectsHelperPatch)
