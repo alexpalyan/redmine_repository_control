@@ -189,16 +189,17 @@ sub authen_handler {
 
     # Pull the hashed password for the user from the DB
     my $dbh          = connect_database($r);
-    my $sth = $dbh->prepare("SELECT hashed_password, auth_source_id FROM users WHERE users.status=1 AND login=? ");
+    my $sth = $dbh->prepare("SELECT hashed_password, salt, auth_source_id FROM users WHERE users.status=1 AND login=? ");
     $sth->execute($redmine_user);
 
     # check the result from the DB query to try and authenticate the user
-    while ( my($hashed_password, $auth_source_id) = $sth->fetchrow_array ) {
+    while ( my($hashed_password, $salt, $auth_source_id) = $sth->fetchrow_array ) {
 
         # if there is an auth_source_id set, then skip this first part and authenticate using the auth_source
         unless($auth_source_id) {
             # otherwise, authenticate using the hashed password
-            if ( $hashed_password eq $pass_digest ) {
+            my $salted_password = Digest::SHA1::sha1_hex($salt.$pass_digest);
+            if ( $hashed_password eq $salted_password ) {
                 $ret = OK;
             }
         } elsif ($CanUseLDAPAuth) {
